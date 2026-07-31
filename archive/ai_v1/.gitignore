@@ -1,0 +1,31 @@
+# Raw data — too large for git, gitignored
+data/raw/
+data/processed/*.parquet
+data/processed/basin_masks/*.npy
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large output files (keep only final figures)
+results/stage2_outputs/*.parquet
+
+# Environment secrets — NEVER commit these
+.netrc
+.cdsapirc
+*.env
+
+# Editor
+.vscode/
+.idea/

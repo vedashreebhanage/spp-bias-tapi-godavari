@@ -1,0 +1,18 @@
+# Stage 1 redo -- acquisition + analysis
+numpy
+pandas
+scipy
+matplotlib
+xarray
+netCDF4
+h5netcdf
+dask
+rioxarray
+rasterio
+geopandas
+shapely
+pyproj
+regionmask
+requests
+imdlib          # IMD gridded rainfall
+cdsapi          # Copernicus CDS (ERA5-Land)
