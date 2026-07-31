@@ -1,0 +1,11 @@
+﻿data/raw/
+data/processed/
+*.GRD
+*.nc
+*.nc4
+*.tif
+_tiles/
+__pycache__/
+*.pyc
+.env
+.cdsapirc
