@@ -1,87 +1,158 @@
-r"""
-Download ERA5-Land daily total precipitation, 2015-2023, Tapi bbox.
+"""
+ERA5-Land daily total precipitation, 2015-2023.
 
-Prerequisites
--------------
-1. Register at https://cds.climate.copernicus.eu/
-2. Open the dataset page for "ERA5-Land daily statistics" and ACCEPT THE LICENCE.
-   Without this the API returns 403 no matter what your key is.
-3. Create the file  C:/Users/<you>/.cdsapirc  containing:
+Why this script does NOT use the "daily statistics" dataset
+------------------------------------------------------------
+CDS rejects it:
 
-       url: https://cds.climate.copernicus.eu/api
-       key: <your-token>
+    Daily statistics of accumulated variables are not supported for this dataset,
+    skipping: total_precipitation
 
-4. pip install cdsapi
+Accumulated variables (precipitation, radiation, fluxes) are excluded from the derived
+daily-statistics product. So we go to the source dataset instead.
 
-Then:  python download_era5.py
+Why requesting only 00:00 gives daily totals
+--------------------------------------------
+ERA5-Land accumulates precipitation from the beginning of each day. The value stamped
+00:00 UTC on day D+1 is the complete accumulation for day D. Therefore:
 
-IMPORTANT
----------
-This requests the *derived daily statistics* product so that Copernicus performs
-the hourly -> daily accumulation server-side. Doing it yourself is the single most
-common source of ERA5 precipitation errors.
+    daily total for day D  ==  tp at 00:00 UTC on day D+1
 
-Units are METRES. Convert to mm (x1000) during processing, not here -- keep raw
-files raw.
+This means:
+  * we request ONE timestep per day, not 24  (24x smaller download)
+  * NO summing is required -- and summing hourly values would be badly wrong, since
+    they are cumulative, not per-hour. That mistake inflates totals several-fold and
+    is the most common ERA5 precipitation error.
 
-Accumulation is in UTC. IMD's rain day runs 0830 IST to 0830 IST (UTC+05:30).
-Decide how you handle this offset and document it.
+Consequence for file contents
+-----------------------------
+The file for year Y contains timestamps 00:00 on each day of Y, which represent
+rainfall on the PRECEDING day. So year Y's file covers 31 Dec (Y-1) through 30 Dec (Y).
+At analysis time you must shift the time axis back by one day:
 
-If the request is rejected, open the dataset page, configure the same selection in
-the web form, click "Show API request", and reconcile the keys below with what CDS
-prints. The web form is always authoritative.
+    da = da.assign_coords(time=da.time - np.timedelta64(1, "D"))
+
+The script also fetches 2024-01-01 so that 31 Dec 2023 is covered.
+
+Time-zone caveat
+----------------
+These are 00-24 UTC days. IMD's rain day runs 0830 IST to 0830 IST (UTC+05:30), so the
+two windows are offset by 3 hours. Decide how you handle that and state it in your
+methods -- do not leave it implicit.
+
+Units
+-----
+METRES. Multiply by 1000 for mm at analysis time; keep raw files raw.
+
+Setup
+-----
+  1. https://cds.climate.copernicus.eu/  -> register
+  2. Open the "ERA5-Land hourly data from 1950 to present" dataset page and
+     ACCEPT THE LICENCE (separate from registering).
+  3. C:/Users/<you>/.cdsapirc:
+         url: https://cds.climate.copernicus.eu/api
+         key: <personal access token>
+  4. pip install cdsapi
+
+Usage
+-----
+  python scripts/download_era5.py --clean
+  python scripts/download_era5.py --basin godavari
 """
 
+import argparse
 import sys
 from pathlib import Path
 
-OUT_DIR = Path("data/raw/era5")
-DATASET = "derived-era5-land-daily-statistics"
+sys.path.insert(0, str(Path(__file__).parent))
+from basins import YEARS, cds_area  # noqa: E402
 
-# [North, West, South, East]
-AREA = [23.00, 72.25, 19.75, 79.00]
-
-YEARS = [str(y) for y in range(2015, 2024)]
+DATASET = "reanalysis-era5-land"
 MONTHS = [f"{m:02d}" for m in range(1, 13)]
 DAYS = [f"{d:02d}" for d in range(1, 32)]
 
 
+def clean_partials(out_dir: Path) -> None:
+    junk = [p for p in out_dir.glob("*.nc") if "_h_" in p.name]
+    for p in junk:
+        p.unlink()
+        print(f"  removed stale hourly file: {p.name}")
+    print("  no stale hourly files found" if not junk else "")
+
+
+def request_for(year: int, months, days, area) -> dict:
+    return {
+        "variable": ["total_precipitation"],
+        "year": str(year),
+        "month": months,
+        "day": days,
+        "time": ["00:00"],          # <- the whole trick; see module docstring
+        "area": area,
+        "data_format": "netcdf",
+        "download_format": "unarchived",
+    }
+
+
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--basin", default="tapi")
+    ap.add_argument("--clean", action="store_true")
+    args = ap.parse_args()
+
     try:
         import cdsapi
     except ImportError:
-        sys.exit("cdsapi not installed.  Run:  pip install cdsapi")
+        sys.exit("Run:  pip install cdsapi")
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = Path("data/raw/era5")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.clean:
+        clean_partials(out_dir)
+
+    area = cds_area(args.basin)
+    print(f"{args.basin.upper()}  area [N,W,S,E] = {area}")
+    print(f"Dataset: {DATASET}   one timestep per day (00:00 UTC)")
+    print("Reminder: each 00:00 value is the total for the PREVIOUS day.\n")
+
     client = cdsapi.Client()
+    failed = []
 
+    # main years
     for year in YEARS:
-        target = OUT_DIR / f"era5_tapi_{year}.nc"
-        if target.exists():
-            print(f"{year}: already present, skipping")
+        target = out_dir / f"era5_{args.basin}_{year}.nc"
+        if target.exists() and target.stat().st_size > 0:
+            print(f"{year}: present, skipping")
             continue
 
-        print(f"{year}: requesting...")
-        request = {
-            "variable": ["total_precipitation"],
-            "year": year,
-            "month": MONTHS,
-            "day": DAYS,
-            "daily_statistic": "daily_sum",
-            "time_zone": "utc+00:00",
-            "frequency": "1_hourly",
-            "area": AREA,
-            "data_format": "netcdf",
-        }
+        print(f"{year}: requesting (CDS queues jobs; this can take minutes)...")
         try:
-            client.retrieve(DATASET, request, str(target))
-            print(f"{year}: saved -> {target}  "
-                  f"({target.stat().st_size / 1e6:.1f} MB)")
+            client.retrieve(DATASET, request_for(year, MONTHS, DAYS, area), str(target))
+            print(f"{year}: saved  ({target.stat().st_size / 1e6:.2f} MB)")
         except Exception as exc:
+            failed.append(year)
+            target.unlink(missing_ok=True)
             print(f"{year}: FAILED -- {exc}")
-            print("  Check: licence accepted? .cdsapirc correct? request keys "
-                  "still current (use 'Show API request' on the CDS web form)?")
-            break
+            print("  If 403: accept the licence on the ERA5-Land hourly dataset page.")
+            if len(failed) >= 2:
+                sys.exit("Two failures -- fix the cause before retrying.")
+
+    # one extra day so that 31 Dec of the final year is covered
+    tail_year = max(YEARS) + 1
+    tail = out_dir / f"era5_{args.basin}_{tail_year}0101.nc"
+    if not tail.exists():
+        print(f"\n{tail_year}-01-01: fetching (covers 31 Dec {max(YEARS)})...")
+        try:
+            client.retrieve(DATASET, request_for(tail_year, ["01"], ["01"], area),
+                            str(tail))
+            print("  saved")
+        except Exception as exc:
+            print(f"  FAILED -- {exc}")
+            print(f"  Without it, 31 Dec {max(YEARS)} will be missing.")
+
+    print(f"\nDone. failed years: {failed if failed else 'none'}")
+    print("Re-run to retry failures (existing files are skipped).")
+    print("\nAt analysis time, shift the time axis back one day:")
+    print("    da = da.assign_coords(time=da.time - np.timedelta64(1, 'D'))")
 
 
 if __name__ == "__main__":

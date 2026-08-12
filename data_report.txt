@@ -1,0 +1,177 @@
+DATA REPORT -- exact file contents, no interpretation
+
+====================================================================
+CHIRPS  data/raw/chirps/
+====================================================================
+--------------------------------------------------------------------
+FILE: data\raw\chirps\chirps_tapi_2015.nc  (1.84 MB)
+dimensions : {'time': 365, 'latitude': 80, 'longitude': 120}
+coord latitude    : 80 values, first=19.524993896484375, last=23.474998474121094
+coord longitude   : 120 values, first=72.52499389648438, last=78.47500610351562
+coord time        : 365 values, first=2015-01-01T00:00:00.000000000, last=2015-12-31T00:00:00.000000000
+global attributes:
+  Conventions = CF-1.6
+  title = CHIRPS Version 2.0
+  history = created by Climate Hazards Group
+  version = Version 2.0
+  date_created = 2016-01-19
+  creator_name = Pete Peterson
+  creator_email = pete@geog.ucsb.edu
+  institution = Climate Hazards Group.  University of California at Santa Barbara
+  documentation = http://pubs.usgs.gov/ds/832/
+  reference = Funk, C.C., Peterson, P.J., Landsfeld, M.F., Pedreros, D.H., Verdin, J.P., Rowland, J.D., Romero, B.E., Husak, G.J., Mic
+  comments =  time variable denotes the first day of the given day. Improved October 2015.
+  acknowledgements = The Climate Hazards Group InfraRed Precipitation with Stations development process was carried out through U.S. Geologic
+  ftp_url = ftp://chg-ftpout.geog.ucsb.edu/pub/org/chg/products/CHIRPS-latest/
+  website = http://chg.geog.ucsb.edu/data/chirps/index.html
+  faq = http://chg-wiki.geog.ucsb.edu/wiki/CHIRPS_FAQ
+variable 'precip': shape (365, 80, 120), dtype float32
+  attr units = mm/day
+  attr standard_name = convective precipitation rate
+  attr long_name = Climate Hazards group InfraRed Precipitation with Stations
+  attr time_step = day
+  attr geostatial_lat_min = -50.0
+  attr geostatial_lat_max = 50.0
+  attr geostatial_lon_min = -180.0
+  attr geostatial_lon_max = 180.0
+  finite values: 3,437,570 of 3,504,000 (98.1%)
+  min=0.0000  max=206.6874  mean=2.4833
+  sample (middle day, 4x4 cells):
+    [[0. 0. 0. 0.]
+ [0. 0. 0. 0.]
+ [0. 0. 0. 0.]
+ [0. 0. 0. 0.]]
+
+remaining years, one line each (var / days / min / max / mean of finite):
+  chirps_tapi_2016.nc: precip (366, 80, 120) min=0.00 max=316.58 mean=3.190
+  chirps_tapi_2017.nc: precip (365, 80, 120) min=0.00 max=273.97 mean=2.669
+  chirps_tapi_2018.nc: precip (365, 80, 120) min=0.00 max=330.26 mean=2.505
+  chirps_tapi_2019.nc: precip (365, 80, 120) min=0.00 max=338.73 mean=3.755
+  chirps_tapi_2020.nc: precip (366, 80, 120) min=0.00 max=276.53 mean=3.559
+  chirps_tapi_2021.nc: precip (365, 80, 120) min=0.00 max=245.12 mean=2.986
+  chirps_tapi_2022.nc: precip (365, 80, 120) min=0.00 max=320.51 mean=3.867
+  chirps_tapi_2023.nc: precip (365, 80, 120) min=0.00 max=334.58 mean=2.862
+
+====================================================================
+ERA5-LAND  data/raw/era5/
+====================================================================
+--------------------------------------------------------------------
+FILE: data\raw\era5\era5_tapi_2015.nc  (1.31 MB)
+dimensions : {'valid_time': 365, 'latitude': 33, 'longitude': 68}
+coord number      : 0
+coord valid_time  : 365 values, first=2015-01-01T00:00:00.000000000, last=2015-12-31T00:00:00.000000000
+coord latitude    : 33 values, first=23.0, last=19.8
+coord longitude   : 68 values, first=72.3, last=79.0
+coord expver      : 365 values, first=0001, last=0001
+global attributes:
+  GRIB_centre = ecmf
+  GRIB_centreDescription = European Centre for Medium-Range Weather Forecasts
+  GRIB_subCentre = 0
+  Conventions = CF-1.7
+  institution = European Centre for Medium-Range Weather Forecasts
+  history = 2026-08-06T12:42 GRIB to CDM+CF via cfgrib-0.9.15.1/ecCodes-2.48.0 with {"source": "data.grib", "filter_by_keys": {}, "e
+variable 'tp': shape (365, 33, 68), dtype float32
+  attr GRIB_paramId = 228
+  attr GRIB_dataType = fc
+  attr GRIB_numberOfPoints = 2244
+  attr GRIB_typeOfLevel = surface
+  attr GRIB_stepUnits = 1
+  attr GRIB_stepType = accum
+  attr GRIB_gridType = regular_ll
+  attr GRIB_uvRelativeToGrid = 0
+  attr GRIB_NV = 0
+  attr GRIB_Nx = 68
+  attr GRIB_Ny = 33
+  attr GRIB_cfName = unknown
+  attr GRIB_cfVarName = tp
+  attr GRIB_gridDefinitionDescription = Latitude/Longitude Grid
+  attr GRIB_iDirectionIncrementInDegrees = 0.1
+  attr GRIB_iScansNegatively = 0
+  attr GRIB_jDirectionIncrementInDegrees = 0.1
+  attr GRIB_jPointsAreConsecutive = 0
+  attr GRIB_jScansPositively = 0
+  attr GRIB_latitudeOfFirstGridPointInDegrees = 23.0
+  attr GRIB_latitudeOfLastGridPointInDegrees = 19.8
+  attr GRIB_longitudeOfFirstGridPointInDegrees = 72.3
+  attr GRIB_longitudeOfLastGridPointInDegrees = 79.0
+  attr GRIB_missingValue = 3.4028234663852886e+38
+  attr GRIB_name = Total precipitation
+  attr GRIB_shortName = tp
+  attr GRIB_totalNumber = 0
+  attr GRIB_units = m
+  attr long_name = Total precipitation
+  attr units = m
+  attr standard_name = unknown
+  attr GRIB_surface = 0.0
+  finite values: 778,910 of 819,060 (95.1%)
+  min=0.0000  max=0.3351  mean=0.0025
+  sample (middle day, 4x4 cells):
+    [[2.315e-04 1.963e-04 1.615e-04 1.272e-04]
+ [1.131e-04 9.212e-05 7.313e-05 5.835e-05]
+ [1.663e-05 1.003e-05 6.288e-06 4.455e-06]
+ [8.360e-06 4.038e-06 1.997e-06 1.997e-06]]
+
+remaining files, one line each:
+  era5_tapi_2016.nc: tp (366, 33, 68) min=0.000000 max=0.243796 mean=0.003175
+  era5_tapi_2017.nc: tp (365, 33, 68) min=0.000000 max=0.399334 mean=0.002523
+  era5_tapi_2018.nc: tp (365, 33, 68) min=0.000000 max=0.280353 mean=0.002467
+  era5_tapi_2019.nc: tp (365, 33, 68) min=0.000000 max=0.452461 mean=0.004075
+  era5_tapi_2020.nc: tp (366, 33, 68) min=0.000000 max=0.272472 mean=0.003125
+  era5_tapi_2021.nc: tp (365, 33, 68) min=0.000000 max=0.287391 mean=0.002828
+  era5_tapi_2022.nc: tp (365, 33, 68) min=0.000000 max=0.234467 mean=0.003709
+  era5_tapi_2023.nc: tp (365, 33, 68) min=0.000000 max=0.290915 mean=0.003135
+  era5_tapi_20240101.nc: tp (1, 33, 68) min=0.000001 max=0.000090 mean=0.000003
+
+====================================================================
+IMERG  data/raw/imerg/
+====================================================================
+subsetted granules found : 2693
+global-size granules     : 1  (['3B-DAY.MS.MRG.3IMERG.20221123-S000000-E235959.V07B.nc4'])
+--------------------------------------------------------------------
+FILE: data\raw\imerg\3B-DAY.MS.MRG.3IMERG.20180908-S000000-E235959.V07B.nc4  (0.04 MB)
+dimensions : {'time': 1, 'lon': 69, 'lat': 33, 'nv': 2}
+coord lon         : 69 values, first=72.25, last=79.05000305175781
+coord time        : ['2018-09-08T00:00:00.000000000']
+coord lat         : 33 values, first=19.750000000000004, last=22.950000000000006
+global attributes:
+  BeginDate = 2018-09-08
+  BeginTime = 00:00:00.000Z
+  EndDate = 2018-09-08
+  EndTime = 23:59:59.999Z
+  FileHeader = StartGranuleDateTime=2018-09-08T00:00:00.000Z;
+StopGranuleDateTime=2018-09-08T23:59:59.999Z
+  InputPointer = 3B-HHR.MS.MRG.3IMERG.20180908-S000000-E002959.0000.V07B.HDF5;3B-HHR.MS.MRG.3IMERG.20180908-S003000-E005959.0030.V07B.HDF
+  title = GPM IMERG Final Precipitation L3 1 day 0.1 degree x 0.1 degree (GPM_3IMERGDF)
+  DOI = 10.5067/GPM/IMERGDF/DAY/07
+  ProductionTime = 2023-12-27T15:48:01.278Z
+  build_dmrpp_metadata.created = 2025-02-09T19:32:35Z
+  build_dmrpp_metadata.build_dmrpp = 3.21.0-526
+  build_dmrpp_metadata.bes = 3.21.0-526
+  build_dmrpp_metadata.libdap = libdap-3.21.0-120
+  build_dmrpp_metadata.configuration = 
+# TheBESKeys::get_as_config()
+AllowedHosts=^https?:\/\/
+BES.Catalog.catalog.FollowSymLinks=Yes
+BES.Catalog.catalog.Root
+  build_dmrpp_metadata.invocation = build_dmrpp -c /tmp/bes_conf_blkB -f /tmp/tmpxm5gsr7d//3B-DAY.MS.MRG.3IMERG.20180908-S000000-E235959.V07B.nc4 -r /tmp/dm
+  history = 2026-08-06 20:19:26 GMT hyrax-1.17.1-1404 https://opendap.earthdata.nasa.gov/collections/C2723754864-GES_DISC/granules/G
+  history_json = [{"$schema":"https:\/\/harmony.earthdata.nasa.gov\/schemas\/history\/0.1.0\/history-0.1.0.json","date_time":"2026-08-06T
+variable 'precipitation': shape (1, 69, 33), dtype float32
+  attr units = mm/day
+  attr long_name = Daily mean precipitation rate (combined microwave-IR) estimate. Formerly precipitationCal.
+  finite values: 2,277 of 2,277 (100.0%)
+  min=0.0000  max=10.1700  mean=0.2982
+  sample (middle of grid):
+    [[0. 0. 0. 0.]
+ [0. 0. 0. 0.]
+ [0. 0. 0. 0.]
+ [0. 0. 0. 0.]]
+variable 'time_bnds': shape (1, 2), dtype datetime64[ns]
+  finite values: 2 of 2 (100.0%)
+  min=1536364800000000000.0000  max=1536451199000026880.0000  mean=1536407999500013568.0000
+  sample (middle of grid):
+    '2018-09-08T23:59:59.000026880'
+
+first granule file : 3B-DAY.MS.MRG.3IMERG.20150101-S000000-E235959.V07B.nc4
+last granule file  : 3B-DAY.MS.MRG.3IMERG.20220517-S000000-E235959.V07B.nc4
+sizes: min=35,574 B  max=43,028 B  mean=37,749 B  zero-byte files: 0

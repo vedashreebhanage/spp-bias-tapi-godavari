@@ -48,9 +48,13 @@ apart by even a fraction of a degree, the products silently cover different area
 every comparison between them is wrong — an error that produces plausible-looking
 numbers and no warning. One definition, imported everywhere, removes that failure mode.
 
-It also holds `FLOOD_EVENTS`, currently marked **UNVERIFIED**. Those windows drive the
-entire DPBA metric, so they need CWC or IMD citations before any result depends on
-them. Fix the control-window rule before you look at results, not after.
+It deliberately holds **no** event list. An earlier `FLOOD_EVENTS` dict carried
+placeholder windows marked UNVERIFIED; checking them against IMD showed the 2021
+window (Aug 1–20) was almost entirely dry, so any "event" metric over it would have
+measured dry-day behaviour. Episodes are now derived by
+`src/stage1/define_episodes.py` and read back through `basins.load_episodes()`,
+which raises if they have not been generated — no analysis can run on an assumed
+event set.
 
 ## Accounts you'll need
 

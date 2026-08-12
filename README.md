@@ -65,9 +65,16 @@ yields a testable slope. Discrete zones are retained only as a descriptive summa
 and spatial clusters, not from raw day-cell counts. Grid-cell counts reported
 alongside every N.
 
-**Event windows.** Flood periods require a citable CWC or IMD source. The
-control-window rule is fixed in `scripts/basins.py` *before* results are inspected.
-Until citations are in place these are marked `UNVERIFIED` in code.
+**Event windows.** No hand-picked flood dates. Episodes are *derived* from the
+reference dataset by a rule fixed in `src/stage1/define_episodes.py`: the ten
+wettest non-overlapping 3-day windows by basin-mean IMD rainfall, at least 7 days
+apart. They are called extreme **rainfall** episodes, not floods — a flood is a
+river-stage phenomenon and Ukai's regulation partly decouples basin rainfall from
+stage at Surat, whereas rainfall is what the satellite products actually observe.
+Where an episode coincides with an independently documented flood, that is recorded
+as an annotation and never as part of the selection. The control-day rule (JJAS,
+basin mean ≥ 1 mm, excluding episodes ±3 days) is fixed in the same module *before*
+results are inspected.
 
 **Amplification metric.** Redefined in terms of bias *magnitude* so that a bias moving
 toward zero can never register as amplification, with significance tested rather than

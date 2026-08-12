@@ -1,54 +1,63 @@
 """
-Download spatially-subsetted IMERG V07 daily granules from NASA GES DISC.
+IMERG V07 daily -- spatially subsetted download from NASA GES DISC.
 
-Why a URL list instead of a direct API call
--------------------------------------------
+Why a URL list rather than a direct API call
+--------------------------------------------
 IMERG daily granules are GLOBAL (~29 MB each). Nine years = ~95 GB.
-Subsetted to the Tapi bbox they are ~0.1 MB each = ~350 MB total.
-GES DISC performs the subsetting server-side and hands you a list of URLs.
+Subsetted to a basin bbox they are ~0.1 MB each = ~350 MB. Always subset.
+GES DISC does the subsetting server-side and gives you a list of URLs.
 
-Steps
------
-1. Create a free Earthdata account: https://urs.earthdata.nasa.gov/
+Step 1 -- print the exact settings to paste into the subsetter
+--------------------------------------------------------------
+  python scripts/download_imerg.py --show-settings
+  python scripts/download_imerg.py --show-settings --events-only
+
+Step 2 -- generate the URL list (one-time, in a browser)
+--------------------------------------------------------
+1. Free account: https://urs.earthdata.nasa.gov/
 2. Profile -> Applications -> Authorized Apps -> approve "NASA GESDISC DATA ARCHIVE".
-   (Skipping this is the #1 cause of 401 errors.)
+   Skipping this causes nearly every 401 error people hit here.
 3. https://disc.gsfc.nasa.gov/datasets/GPM_3IMERGDF_07/summary
-   -> "Subset / Get Data"
-      Download Method : OPeNDAP
-      Date range      : 2015-01-01 to 2023-12-31
-      Region          : 72.25, 19.75, 79.00, 23.00   (W, S, E, N)
-      Variables       : precipitation, precipitationQualityIndex
-   -> Get Data -> "Download links list" -> save next to this script as imerg_urls.txt
-4. python download_imerg.py
+   -> "Subset / Get Data", using the settings printed in step 1
+4. Get Data -> "Download links list" -> save as  data/raw/imerg/imerg_urls.txt
 
-Scope reduction option
-----------------------
-If 3,287 files is impractical, restrict the date range in step 3 to your flood-event
-and control windows only. Then report the full 9-year bias matrix for CHIRPS + ERA5
-and use IMERG only in the DPBA analysis -- a legitimate scope decision, but state it
+Step 3 -- download
+------------------
+  python scripts/download_imerg.py
+
+Scope note
+----------
+--events-only restricts to flood windows plus matched control windows, cutting
+~3,287 granules to a few hundred. Perfectly defensible: report the full 9-year bias
+matrix for CHIRPS + ERA5 and use IMERG only in the event analysis -- but say so
 explicitly in your methods.
 
 Unit note
 ---------
-V07 daily 'precipitation' is mm/day. V06 used mm/hr. Do not copy V06 handling code;
+V07 daily 'precipitation' is mm/day. V06 used mm/hr. Do not reuse V06 handling code;
 check the variable's units attribute after download.
 """
 
+import argparse
+import datetime as dt
 import getpass
+import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+from basins import gesdisc_region, load_episodes  # noqa: E402
 
 try:
     import requests
 except ImportError:
-    sys.exit("requests not installed.  Run:  pip install requests")
+    sys.exit("Run:  pip install requests")
 
-URL_FILE = Path("imerg_urls.txt")
-OUT_DIR = Path("data/raw/imerg")
+CONTROL_PAD_DAYS = 15   # control window = same calendar days +/- this, in other years
 
 
 class EarthdataSession(requests.Session):
-    """Preserves auth across the URS OAuth redirect chain (NASA's documented pattern)."""
+    """Keeps auth across the URS OAuth redirect chain (NASA's documented pattern)."""
 
     AUTH_HOST = "urs.earthdata.nasa.gov"
 
@@ -67,36 +76,88 @@ class EarthdataSession(requests.Session):
                 del headers["Authorization"]
 
 
-def main() -> None:
-    if not URL_FILE.exists():
-        sys.exit(f"{URL_FILE} not found. Generate it via the GES DISC subsetter "
-                 f"(see the docstring at the top of this file).")
+def event_ranges(basin: str) -> list:
+    """Episode windows plus padded surrounds, as (start, end) date strings.
 
-    urls = [ln.strip() for ln in URL_FILE.read_text().splitlines()
-            if ln.strip() and ln.strip().startswith("http")]
+    Episodes come from src/stage1/define_episodes.py via basins.load_episodes().
+    Raises if they have not been derived yet -- there is no default event set.
+    """
+    out = []
+    for ep in load_episodes(basin):
+        d0 = dt.date.fromisoformat(ep["start"])
+        d1 = dt.date.fromisoformat(ep["end"])
+        out.append((str(d0), str(d1)))
+        out.append((str(d0 - dt.timedelta(days=CONTROL_PAD_DAYS)),
+                    str(d1 + dt.timedelta(days=CONTROL_PAD_DAYS))))
+    return out
+
+
+def show_settings(basin: str, events_only: bool) -> None:
+    print("=" * 66)
+    print("GES DISC subsetter settings")
+    print("=" * 66)
+    print("  Dataset          : GPM_3IMERGDF v07  (GPM IMERG Final Daily)")
+    print("  Download Method  : OPeNDAP")
+    print(f"  Region (W,S,E,N) : {gesdisc_region(basin)}")
+    print("  Variables        : precipitation, precipitationQualityIndex")
+    if events_only:
+        print("  Date ranges      : (submit one request per range, append the lists)")
+        for a, b in event_ranges(basin):
+            print(f"                     {a}  to  {b}")
+        print("\n  NOTE: this pads +/- "
+              f"{CONTROL_PAD_DAYS} days around each episode purely so the DOWNLOAD"
+              " covers the surrounding days.")
+        print("  It is not the analysis control rule -- that lives in "
+              "src/stage1/define_episodes.py.")
+    else:
+        print("  Date range       : 2015-01-01  to  2023-12-31   (~3,287 granules)")
+    print("\n  Save the link list to:  data/raw/imerg/imerg_urls.txt")
+    print("=" * 66)
+    print("\nNote: episode windows are derived from IMD by "
+          "src/stage1/define_episodes.py, not hand-picked.")
+
+
+def download(out_dir: Path) -> None:
+    url_file = out_dir / "imerg_urls.txt"
+    if not url_file.exists():
+        sys.exit(f"{url_file} not found.\n"
+                 f"Run with --show-settings first, then generate the list "
+                 f"via the GES DISC subsetter.")
+
+    urls = [ln.strip() for ln in url_file.read_text().splitlines()
+            if ln.strip().startswith("http")]
     if not urls:
-        sys.exit(f"{URL_FILE} contains no http URLs.")
+        sys.exit(f"{url_file} contains no http URLs.")
 
     print(f"{len(urls)} granules listed.")
     username = input("Earthdata username: ")
     password = getpass.getpass("Earthdata password: ")
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
     session = EarthdataSession(username, password)
 
     done = skipped = failed = 0
     for i, url in enumerate(urls, 1):
-        name = url.split("/")[-1].split("?")[0]
-        if not name.endswith((".nc4", ".nc", ".HDF5")):
-            name += ".nc4"
-        target = OUT_DIR / name
+        # Derive a safe, unique filename.
+        # OPeNDAP URLs embed slashes and colons inside the dap4.ce query string, so
+        # naive "last path segment" logic is wrong: strip the query FIRST, then take
+        # the last segment, then sanitise characters Windows cannot store (":" would
+        # silently create an NTFS alternate data stream -- every granule collapsing
+        # onto one file, which is exactly the bug this replaces).
+        m = re.search(r"(3B-DAY\.MS\.MRG\.3IMERG\.\d{8}-S\d{6}-E\d{6}\.V\d+[A-Z]?)", url)
+        if m:
+            name = m.group(1) + ".nc4"
+        else:
+            name = url.split("?")[0].split("/")[-1]
+            name = re.sub(r"%[0-9A-Fa-f]{2}", "_", name).replace(":", "_")
+            if not name.endswith((".nc4", ".nc", ".HDF5", ".pdf")):
+                name += ".nc4"
+        target = out_dir / name
 
         if target.exists() and target.stat().st_size > 0:
             skipped += 1
             continue
 
         try:
-            with session.get(url, stream=True, timeout=120) as r:
+            with session.get(url, stream=True, timeout=180) as r:
                 r.raise_for_status()
                 with open(target, "wb") as fh:
                     for chunk in r.iter_content(chunk_size=1 << 16):
@@ -104,19 +165,34 @@ def main() -> None:
             done += 1
         except Exception as exc:
             failed += 1
-            print(f"  [{i}/{len(urls)}] FAILED {name}: {exc}")
             target.unlink(missing_ok=True)
+            print(f"  [{i}/{len(urls)}] FAILED {name}: {exc}")
             if failed == 1 and "401" in str(exc):
-                print("  401 => check that 'NASA GESDISC DATA ARCHIVE' is an "
-                      "authorized app in your Earthdata profile.")
+                print("  401 -> authorize 'NASA GESDISC DATA ARCHIVE' in your "
+                      "Earthdata profile, then re-run.")
 
         if i % 100 == 0:
-            print(f"  [{i}/{len(urls)}]  downloaded={done} skipped={skipped} failed={failed}")
+            print(f"  [{i}/{len(urls)}] downloaded={done} skipped={skipped} failed={failed}")
 
     print(f"\nFinished. downloaded={done} skipped={skipped} failed={failed}")
-    print(f"Output: {OUT_DIR.resolve()}")
     if failed:
-        print("Re-run the script to retry failures (existing files are skipped).")
+        print("Re-run to retry failures (existing files are skipped).")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--basin", default="tapi")
+    ap.add_argument("--show-settings", action="store_true")
+    ap.add_argument("--events-only", action="store_true")
+    args = ap.parse_args()
+
+    out_dir = Path("data/raw/imerg")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.show_settings:
+        show_settings(args.basin, args.events_only)
+    else:
+        download(out_dir)
 
 
 if __name__ == "__main__":

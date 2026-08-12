@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from basins import BASINS, FLOOD_EVENTS, YEARS  # noqa: E402
+from basins import BASINS, YEARS, load_episodes  # noqa: E402
 
 GREEN, YELLOW, RED, RESET = "\033[92m", "\033[93m", "\033[91m", "\033[0m"
 
@@ -113,23 +113,32 @@ def main() -> None:
     else:
         line("Basin shapefile", "bad", str(shp))
 
-    # Flood events
-    events = FLOOD_EVENTS.get(basin, [])
-    unverified = [e for e in events if "UNVERIFIED" in e[2]]
-    if not events:
-        line("Flood event windows", "bad", "none defined in basins.py")
-    elif unverified:
-        line("Flood event windows", "warn",
-             f"{len(unverified)}/{len(events)} lack a citation")
+    # Basin mask (must exist before anything downstream)
+    mask_file = Path("data/processed/tapi_mask.npz")
+    if mask_file.exists():
+        import numpy as np
+        mk = np.load(mask_file)
+        line("Basin mask", "ok",
+             f"{int(mk['n_cells'])} cells, implied area "
+             f"{float(mk['implied_area_km2']):,.0f} km2")
     else:
-        line("Flood event windows", "ok", f"{len(events)} events, all cited")
+        line("Basin mask", "bad", "run src/stage1/build_mask.py")
+
+    # Extreme rainfall episodes (derived, not hand-picked)
+    try:
+        episodes = load_episodes(basin)
+    except (FileNotFoundError, NotImplementedError) as exc:
+        line("Rainfall episodes", "bad", str(exc).split(".")[0])
+    else:
+        line("Rainfall episodes", "ok",
+             f"{len(episodes)} derived, "
+             f"{sum('documented_flood' in e for e in episodes)} with a documented flood")
 
     print("\nNext actions in order:")
-    print("  1. python scripts/verify_chirps.py")
-    print("  2. python scripts/download_dem.py            (--tiles 4 if it fails)")
-    print("  3. python scripts/download_era5.py --clean")
-    print("  4. python scripts/download_imerg.py --show-settings --events-only")
-    print("  5. cite the flood windows in basins.py before computing DPBA\n")
+    print("  1. python src/stage1/build_mask.py           (if mask missing)")
+    print("  2. python src/stage1/define_episodes.py      (if episodes missing)")
+    print("  3. preprocessing pipeline -> data/processed/ on the common 0.25 deg grid")
+    print("  4. metrics module + unit tests, then the bias matrix")
 
 
 if __name__ == "__main__":
