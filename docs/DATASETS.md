@@ -19,7 +19,7 @@ own conventions demand them.
 | Array layout | `(n_days, 129, 135)`, latitude ascending |
 | Units | mm/day |
 | Fill value | −999.0 (ocean / outside India); first values in every file are −999 (Indian Ocean corner) |
-| Rain-day window | 0830 IST to 0830 IST |
+| Rain-day window | 0830 IST to 0830 IST, **labelled by the day it ends** (value stamped D = rain from 0830 IST D−1 to 0830 IST D) |
 | Land cells per day | 4,964 (constant across all years) |
 | Completeness | 9/9 years, byte counts exact for (days×129×135×4) |
 
@@ -43,7 +43,15 @@ Sample (1 Aug 2021): Surat cell (21.25N, 72.75E) = 3.48 mm; Bhusawal (21.00N,
 
 **Handling requirements**
 - Shape and coordinates must be asserted by the reader (no metadata in file).
-- Mask value −999 → NaN. No other transformation.
+- Mask value −999 → NaN. No other value transformation.
+- **Relabel dates one day back** (`readers.IMD_LABEL_SHIFT_DAYS = 1`): the value
+  stamped D covers 0300 UTC D−1 → 0300 UTC D, i.e. 21 of its 24 hours fall on
+  day D−1, which is what every product calls D−1. Year file Y therefore covers
+  31 Dec (Y−1) .. 30 Dec (Y), and the aligned record ends 2023-12-30 (31 Dec 2023
+  would need `RF2024.GRD`). Found 2026-11-20: without the shift, basin-mean
+  correlation with IMD is 0.57 / 0.69 / 0.57 (CHIRPS / ERA5 / IMERG); with it,
+  0.82 / 0.85 / 0.93. `build_dataset.py` now fails if any product's best lag
+  against IMD is not 0.
 - Note: five of nine years contain daily values above 500 mm (max 979.1 mm in
   2022). Any cap at 500 mm deletes real data.
 
@@ -87,7 +95,21 @@ Per-year values (finite cells):
 
 **Handling requirements**
 - None beyond NaN awareness. Units and orientation are already analysis-ready.
-- Regrid 0.05° → 0.25° by 5×5 block averaging (exact nesting into the IMD grid).
+- Regrid 0.05° → 0.25° by **area-weighted averaging, not a 5×5 block mean.**
+  An earlier note in this file claimed exact 5×5 nesting; that is wrong and was
+  corrected on 2026-08-13 after checking the grids against each other. CHIRPS cell
+  edges lie on 19.5 + 0.05k (lat) and 72.5 + 0.05k (lon); IMD cell edges lie on
+  6.375 + 0.25k and 66.375 + 0.25k. An IMD edge such as 20.125 sits at 12.5 CHIRPS
+  steps — **exactly half a cell out**. Each 0.25° cell therefore covers six partial
+  CHIRPS cells per axis, weighted 0.5, 1, 1, 1, 1, 0.5. A 5×5 block mean would
+  average a footprint displaced 0.025° (~2.8 km) from the IMD cell it claims to
+  represent: a small, uniform, and completely invisible misalignment of one product
+  against the reference. `src/common/regrid.py` handles this correctly; the case is
+  pinned by `tests/test_regrid.py::test_real_chirps_to_imd_is_offset_by_half_a_cell`.
+- Coordinates are stored as **float32**, so the spacing reads as 0.049995–0.050003
+  rather than 0.05. The axis is fitted to its regular grid from the full span
+  before edges are computed; inferring the step from individual differences
+  accumulates ~3.6e-4° of drift across the axis.
 
 ---
 
@@ -219,10 +241,11 @@ the polygon whose area matches the Tapi basin (CWC figure 65,145 km²).
 | | IMD | CHIRPS | ERA5-Land | IMERG |
 |---|---|---|---|---|
 | Native resolution | 0.25° | 0.05° | 0.1° | 0.1° |
+| Nests into IMD? | — | **no** (half-cell offset) | no | no |
 | Native units | mm/day | mm/day | **m/day** | mm/day |
 | Lat orientation | ascending | ascending | **descending** | ascending |
 | Array order | (t, lat, lon) | (t, lat, lon) | (t, lat, lon) | **(t, lon, lat)** |
-| Day definition | 0830–0830 IST | calendar day | 00–24 UTC (shift −1 day) | 00–24 UTC |
+| Day definition | 0830–0830 IST, stamped by end day (shift −1 day) | calendar day | 00–24 UTC (shift −1 day) | 00–24 UTC |
 | Fill/missing | −999 | NaN (~2%) | NaN over sea (~5%) | none |
 | Files | 9 | 9 | 9 + 1 tail | 3,287 expected (2,693 present) |
 | Status | complete, verified | complete, verified | complete | **incomplete — resume download** |

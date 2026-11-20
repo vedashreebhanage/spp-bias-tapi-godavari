@@ -51,13 +51,14 @@ from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from common.readers import read_imd_year  # noqa: E402
+
 IMD_DIR = Path("data/raw/imd")
 MASK_FILE = Path("data/processed/tapi_mask.npz")
 OUT_FILE = Path("data/processed/rainfall_episodes.json")
 
 YEARS = list(range(2015, 2024))
-NLAT, NLON = 129, 135
-FILL = -999.0
 
 # ------------------------------------------------------- the rule (fixed) --
 WINDOW_DAYS = 3
@@ -68,7 +69,9 @@ CONTROL_WET_THRESHOLD_MM = 1.0       # basin-mean; matches the POD/FAR rain-day 
 CONTROL_BUFFER_DAYS = 3
 
 # Independent corroboration for episodes that coincide with a documented flood.
-# Annotation only -- these never influence selection. Keyed by episode start date.
+# Annotation only -- these never influence selection. Keyed by the documented
+# OCCURRENCE date, and attached to whichever episode window contains that date
+# (not matched on the window's start, which depends on how IMD days are labelled).
 CONFIRMATIONS = {
     "2022-07-12": (
         "Sentinel Asia emergency observation request (requester: ISRO), "
@@ -87,25 +90,23 @@ CONFIRMATIONS = {
 
 
 def load_year(year, mask):
-    """Return (basin_mean_per_day, basin_max_per_day, dates) for one IMD year file."""
+    """Return (basin_mean_per_day, basin_max_per_day, dates) for one IMD year file.
+
+    Goes through the shared reader so that IMD's date relabelling (its value
+    stamped D is rain that fell on D-1; see readers.IMD_LABEL_SHIFT_DAYS) happens
+    in exactly one place. A private copy of the reader here is how the episode
+    dates and the analysis dataset could silently disagree by a day.
+    """
     path = IMD_DIR / f"RF{year}.GRD"
     if not path.exists():
         sys.exit(f"FATAL: missing {path}")
-    raw = np.fromfile(path, dtype="<f4")
-    ndays, rem = divmod(raw.size, NLAT * NLON)
-    if rem:
-        sys.exit(f"FATAL: {path} size {raw.size} is not a multiple of {NLAT * NLON}")
-    leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-    expected = 366 if leap else 365
-    if ndays != expected:
-        sys.exit(f"FATAL: {path} has {ndays} days, expected {expected}")
-
-    arr = raw.reshape(ndays, NLAT, NLON).astype("float64")
-    arr[arr == FILL] = np.nan
+    try:
+        arr, _, _, dates = read_imd_year(year, root=IMD_DIR)
+    except ValueError as exc:
+        sys.exit(f"FATAL: {exc}")
     cells = arr[:, mask]
     if np.isnan(cells).any():
         sys.exit(f"FATAL: {year} has NaN inside the basin mask -- investigate before proceeding")
-    dates = np.arange(f"{year}-01-01", f"{year + 1}-01-01", dtype="datetime64[D]")
     return cells.mean(axis=1), cells.max(axis=1), dates
 
 
@@ -116,7 +117,11 @@ def load_all(mask):
         means.append(m)
         maxes.append(x)
         dates.append(d)
-    return np.concatenate(means), np.concatenate(maxes), np.concatenate(dates)
+    mean, cmax, dates = (np.concatenate(means), np.concatenate(maxes),
+                         np.concatenate(dates))
+    # After IMD's relabelling, RF2015 starts on 2014-12-31; keep the study period.
+    keep = dates >= np.datetime64(f"{YEARS[0]}-01-01")
+    return mean[keep], cmax[keep], dates[keep]
 
 
 def select_episodes(mean, dates):
@@ -202,7 +207,8 @@ def main():
             "peak_day_basin_mean_mm": round(float(mean[peak]), 2),
             "max_cell_day_mm": round(float(cmax[sl].max()), 2),
         }
-        note = CONFIRMATIONS.get(rec["start"])
+        note = next((text for day, text in CONFIRMATIONS.items()
+                     if rec["start"] <= day <= rec["end"]), None)
         if note:
             rec["documented_flood"] = note
         episodes.append(rec)
