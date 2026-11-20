@@ -16,3 +16,4 @@ regionmask
 requests
 imdlib          # IMD gridded rainfall
 cdsapi          # Copernicus CDS (ERA5-Land)
+pytest          # tests/
