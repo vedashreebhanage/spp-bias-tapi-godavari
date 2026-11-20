@@ -16,7 +16,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from stage1.bootstrap import (block_bootstrap, make_spatial_clusters,  # noqa: E402
-                              make_time_blocks, percentile_ci)
+                              make_subset_blocks, make_time_blocks,
+                              percentile_ci, resample_indices)
 
 
 def test_time_blocks_partition_the_record_exactly_once():
@@ -121,6 +122,41 @@ def test_bootstrap_is_reproducible_from_the_seed():
     a = block_bootstrap(obs, sim, stat, blocks, clusters, n_iter=30, seed=7)
     b = block_bootstrap(obs, sim, stat, blocks, clusters, n_iter=30, seed=7)
     assert np.array_equal(a, b)
+
+
+def test_block_bootstrap_draws_are_the_resample_indices():
+    """block_bootstrap must be exactly a statistic over resample_indices' draws,
+    so that step 1 (block_bootstrap) and step 2 (resample_indices) share one
+    definition of a draw."""
+    rng = np.random.default_rng(5)
+    obs = rng.gamma(0.5, 8.0, (90, 10))
+    sim = obs * 1.1 + rng.normal(0, 0.5, obs.shape)
+    blocks = make_time_blocks(90, 30)
+    clusters = make_spatial_clusters(rng.uniform(20, 22, 10), rng.uniform(73, 78, 10))
+    stat = lambda o, s: float(s.sum() - o.sum())   # noqa: E731
+    a = block_bootstrap(obs, sim, stat, blocks, clusters, n_iter=20, seed=3)
+    b = [stat(obs[np.ix_(d, c)], sim[np.ix_(d, c)])
+         for d, c in resample_indices(blocks, clusters, n_iter=20, seed=3)]
+    assert np.allclose(a, b)
+
+
+def test_subset_blocks_never_join_non_consecutive_days():
+    # two "seasons" of 40 and 25 days separated by a gap
+    days = np.concatenate([np.arange(10, 50), np.arange(200, 225)])
+    blocks = make_subset_blocks(days, 30)
+    assert [b.size for b in blocks] == [30, 10, 25]
+    for b in blocks:
+        assert np.all(np.diff(b) == 1)
+    assert np.array_equal(np.concatenate(blocks), days)
+
+
+def test_subset_blocks_reject_unsorted_or_empty_input():
+    for bad in (np.array([], int), np.array([5, 3, 4])):
+        try:
+            make_subset_blocks(bad, 30)
+        except ValueError:
+            continue
+        raise AssertionError(f"should reject {bad}")
 
 
 if __name__ == "__main__":

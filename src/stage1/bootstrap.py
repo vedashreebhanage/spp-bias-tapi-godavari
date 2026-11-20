@@ -25,8 +25,8 @@ clusters.
 
 import numpy as np
 
-__all__ = ["make_time_blocks", "make_spatial_clusters", "block_bootstrap",
-           "percentile_ci", "BLOCK_DAYS"]
+__all__ = ["make_time_blocks", "make_subset_blocks", "make_spatial_clusters",
+           "resample_indices", "block_bootstrap", "percentile_ci", "BLOCK_DAYS"]
 
 # Long enough to contain a whole monsoon spell plus its decay. Rainfall
 # autocorrelation over the basin dies out within a week or two; 30 days is
@@ -40,6 +40,27 @@ def make_time_blocks(n_days, block_days=BLOCK_DAYS):
         raise ValueError("n_days must be positive")
     edges = np.arange(0, n_days, block_days)
     return [np.arange(a, min(a + block_days, n_days)) for a in edges]
+
+
+def make_subset_blocks(day_idx, block_days=BLOCK_DAYS):
+    """Blocks over a SUBSET of days (e.g. one season), as indices into the record.
+
+    ``day_idx`` is a sorted array of selected day indices. It is first split into
+    runs of consecutive days -- so a block never joins 30 Sep 2016 to 1 Jun 2017,
+    which are not neighbours in any sense that autocorrelation cares about -- and
+    each run is then cut into blocks of at most ``block_days``.
+    """
+    day_idx = np.asarray(day_idx)
+    if day_idx.size == 0:
+        raise ValueError("no days selected")
+    if np.any(np.diff(day_idx) <= 0):
+        raise ValueError("day_idx must be strictly increasing")
+    breaks = np.nonzero(np.diff(day_idx) > 1)[0] + 1
+    blocks = []
+    for run in np.split(day_idx, breaks):
+        for a in range(0, run.size, block_days):
+            blocks.append(run[a:a + block_days])
+    return blocks
 
 
 def make_spatial_clusters(lat, lon, n_lon=6, n_lat=2):
@@ -85,18 +106,35 @@ def block_bootstrap(obs, sim, stat, blocks, clusters, n_iter=500, seed=0):
     if len(clusters) != obs.shape[1]:
         raise ValueError("clusters must have one entry per cell")
 
+    out = np.empty(n_iter)
+    for it, (day_idx, cell_idx) in enumerate(
+            resample_indices(blocks, clusters, n_iter, seed)):
+        out[it] = stat(obs[np.ix_(day_idx, cell_idx)], sim[np.ix_(day_idx, cell_idx)])
+    return out
+
+
+def resample_indices(blocks, clusters, n_iter=500, seed=0):
+    """Yield (day_idx, cell_idx) for each bootstrap draw.
+
+    The draws themselves, separated from any statistic, so that several statistics
+    -- different products, different elevation zones, a difference between zones --
+    can all be evaluated on the SAME resample. That is what makes an interval on a
+    difference meaningful: both sides must see the same storms and the same cells.
+
+    Blocks and clusters are drawn with replacement, as many as there are of each.
+    ``cell_idx`` may contain repeats; callers that restrict to a subset of cells
+    (one zone) should filter it, keeping the repeats.
+    """
+    clusters = np.asarray(clusters)
     rng = np.random.default_rng(seed)
     unique = np.unique(clusters)
     members = {c: np.nonzero(clusters == c)[0] for c in unique}
-
-    out = np.empty(n_iter)
-    for it in range(n_iter):
+    for _ in range(n_iter):
         day_idx = np.concatenate(
             [blocks[b] for b in rng.integers(0, len(blocks), len(blocks))])
         cell_idx = np.concatenate(
             [members[unique[c]] for c in rng.integers(0, unique.size, unique.size)])
-        out[it] = stat(obs[np.ix_(day_idx, cell_idx)], sim[np.ix_(day_idx, cell_idx)])
-    return out
+        yield day_idx, cell_idx
 
 
 def percentile_ci(samples, level=95):

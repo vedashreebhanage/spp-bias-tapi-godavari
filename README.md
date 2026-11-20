@@ -159,6 +159,7 @@ python src/stage1/build_mask.py                 # basin mask + terrain per cell
 python src/stage1/define_episodes.py            # extreme rainfall episodes + control days
 python src/common/build_dataset.py              # align all products on the IMD grid (slow: IMERG)
 python src/stage1/audit_step1_overall.py        # overall bias with bootstrap CIs
+python src/stage1/audit_step2_season_zone.py    # bias by season x elevation zone
 python -m pytest tests                          # unit tests
 ```
 
@@ -183,7 +184,7 @@ and every comparison between them is wrong, with no error raised.
 - [x] All products aligned on the IMD grid, with automated calendar-alignment check
 - [x] Metrics and block-bootstrap modules with unit tests
 - [x] Audit step 1: overall basin-wide bias, all products, with CIs
-- [ ] Audit step 2: bias by season × elevation zone
+- [x] Audit step 2: bias by season × elevation zone (descriptive; shared-draw CIs)
 - [ ] Audit step 3: bias as a continuous function of elevation
 - [ ] Audit step 4: episode amplification (|PBIAS| episode vs control), significance-tested
 - [ ] Godavari added as a replication basin
