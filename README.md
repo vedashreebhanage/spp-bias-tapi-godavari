@@ -20,7 +20,9 @@ flood events.
 ├── docs/                 acquisition plan, drafts, reference papers
 ├── archive/ai_v1/        superseded first implementation — do not build on this
 ├── data/                 raw + processed data (gitignored, not distributed)
-└── src/stage1/           corrected pipeline — in progress
+├── src/common/           readers, area-weighted regridding, aligned-dataset builder
+├── src/stage1/           basin mask, episodes, metrics, block bootstrap, audit steps
+└── tests/                unit tests (pytest) for readers, regrid, metrics, bootstrap
 ```
 
 Nothing in `archive/ai_v1/` should be cited or reused. It is kept because comparing
@@ -95,13 +97,14 @@ gitignored.
 | Dataset | Role | Resolution | Source | Status |
 |---|---|---|---|---|
 | IMD gridded rainfall | Reference | 0.25° daily | [IMD Pune](https://www.imdpune.gov.in/) | Complete, sizes verified |
-| CHIRPS v2.0 | Product under test | 0.05° daily | [UCSB CHC](https://data.chc.ucsb.edu/products/CHIRPS-2.0/) | Recovering |
-| ERA5-Land | Product under test | ~0.1° daily | [Copernicus CDS](https://cds.climate.copernicus.eu/) | Pending |
-| IMERG V07 | Product under test | 0.1° daily | [NASA GES DISC](https://disc.gsfc.nasa.gov/) | Pending |
-| SRTM (SRTMGL3) | Terrain | 90 m | [OpenTopography](https://portal.opentopography.org/) | Pending |
+| CHIRPS v2.0 | Product under test | 0.05° daily | [UCSB CHC](https://data.chc.ucsb.edu/products/CHIRPS-2.0/) | Complete, verified |
+| ERA5-Land | Product under test | ~0.1° daily | [Copernicus CDS](https://cds.climate.copernicus.eu/) | Complete (+ 2024-01-01 tail file) |
+| IMERG V07 | Product under test | 0.1° daily | [NASA GES DISC](https://disc.gsfc.nasa.gov/) | Complete, 3,287 granules |
+| SRTM (SRTMGL3) | Terrain | 90 m | [OpenTopography](https://portal.opentopography.org/) | Complete, verified |
 | HydroBASINS | Basin mask | vector | [HydroSHEDS](https://www.hydrosheds.org/) | Present |
 
-Study period: 2015–2023.
+Study period: 2015-01-01 to 2023-12-30 (3,286 days; see the IMD note below for why
+the last day is 30 Dec).
 
 ### Units — mismatches that fail silently
 
@@ -112,8 +115,11 @@ Study period: 2015–2023.
 | ERA5-Land | **metres** | ×1000 at analysis time |
 | IMERG V07 | mm/day | V06 was mm/hr — V06 code is not reusable |
 
-ERA5 accumulates in UTC; the IMD rain day runs 0830–0830 IST. The offset is handled
-explicitly and documented, not ignored.
+ERA5 accumulates in UTC; the IMD rain day runs 0830–0830 IST and is **labelled by
+the day it ends**, so IMD's value for date D is rain that fell mostly on D−1. The
+reader relabels IMD one day back, and `build_dataset.py` fails unless every product
+lines up with IMD at lag 0. The remaining ~3 h offset (0830 IST = 0300 UTC) is
+stated as a limitation.
 
 ---
 
@@ -148,6 +154,12 @@ python scripts/download_dem.py                  # add --tiles 4 if a single requ
 python scripts/download_era5.py --clean
 python scripts/download_imerg.py --show-settings --events-only
 python scripts/download_imerg.py                # after generating imerg_urls.txt
+
+python src/stage1/build_mask.py                 # basin mask + terrain per cell
+python src/stage1/define_episodes.py            # extreme rainfall episodes + control days
+python src/common/build_dataset.py              # align all products on the IMD grid (slow: IMERG)
+python src/stage1/audit_step1_overall.py        # overall bias with bootstrap CIs
+python -m pytest tests                          # unit tests
 ```
 
 Every script accepts `--basin tapi` (default) or `--basin godavari`.
@@ -164,12 +176,16 @@ and every comparison between them is wrong, with no error raised.
 - [x] Audit the original implementation
 - [x] Reproducible acquisition + verification tooling
 - [x] IMD reference data acquired and verified
-- [ ] Remaining products acquired (CHIRPS, ERA5, IMERG, DEM)
-- [ ] Basin mask built and validated against known basin area
-- [ ] Elevation zones derived from DEM
-- [ ] Metrics module with unit tests
-- [ ] Stage 1 bias matrix, basin-masked, all products
-- [ ] Flood windows cited; amplification metric redefined and significance-tested
+- [x] Remaining products acquired (CHIRPS, ERA5, IMERG, DEM)
+- [x] Basin mask built and validated against known basin area (92 cells, +1.8%)
+- [x] Elevation zones derived from DEM (terciles)
+- [x] Extreme rainfall episodes derived by a fixed rule (replaces hand-picked flood windows)
+- [x] All products aligned on the IMD grid, with automated calendar-alignment check
+- [x] Metrics and block-bootstrap modules with unit tests
+- [x] Audit step 1: overall basin-wide bias, all products, with CIs
+- [ ] Audit step 2: bias by season × elevation zone
+- [ ] Audit step 3: bias as a continuous function of elevation
+- [ ] Audit step 4: episode amplification (|PBIAS| episode vs control), significance-tested
 - [ ] Godavari added as a replication basin
 - [ ] Stage 2: correction methods benchmarked against quantile mapping
 
